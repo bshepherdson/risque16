@@ -28,14 +28,15 @@ These are presented in numerical order.
 | 11 | `10000010` | `10000010______oo` | `RFI`, `IFC` and `IFS` |
 | 12 | `10000011` | `10000011XXXXXXXX` | `SWI` with unsigned literal |
 | 13 | `10000100` | `10000100_____ddd` | `SWI` with register |
-| 14 | `1001`     | ???                | Free space? |
-| 15 | `10100`    | `10100_LRrrrrrrrr` | `PUSH` and `POP` |
-| 16 | `10101`    | `10101___SXXXXXXX` | Adjust `SP` |
-| 17 | `1011`     | `1011Lbbbrrrrrrrr` | Multiple load/store |
-| 18 | `110`      | `110LPXXXXXbbbddd` | Load/store with immediate offset |
-| 19 | `11100`    | `11100LPaaabbbddd` | Load/store with register offset |
-| 20 | `11101`    | `11101dddXXXXXXXX` | PC-relative load |
-| 21 | `1111`     | `1111LdddXXXXXXXX` | SP-relative load/store |
+| 14 | `10001`    | `10001L00_____ddd` | `BX` and `BLX` |
+| 15 | `1001`     | ???                | Free space? |
+| 16 | `10100`    | `10100_LRrrrrrrrr` | `PUSH` and `POP` |
+| 17 | `10101`    | `10101___SXXXXXXX` | Adjust `SP` |
+| 18 | `1011`     | `1011Lbbbrrrrrrrr` | Multiple load/store |
+| 19 | `110`      | `110LPXXXXXbbbddd` | Load/store with immediate offset |
+| 20 | `11100`    | `11100LPaaabbbddd` | Load/store with register offset |
+| 21 | `11101`    | `11101dddXXXXXXXX` | PC-relative load |
+| 22 | `1111`     | `1111LdddXXXXXXXX` | SP-relative load/store |
 
 
 ### Format 1 - Move with shift
@@ -267,11 +268,20 @@ Adds an interrupt with the value of `Rd` as the message.
 1 cycle. Does **not** change `CPSR`.
 
 
-### Format 14 - Unused
+### Format 14 - BX and BLX
+
+`10001L00_____ddd`
+
+If `L` is 1, sets `LR` to `PC`. Then sets `PC` to the value of `Rd`.
+
+1 cycle. Does **not** change `CPSR`.
+
+
+### Format 15 - Unused
 
 Free space.
 
-### Format 15 - Push and pop
+### Format 16 - Push and pop
 
 `10100_LRrrrrrrrr`
 
@@ -308,7 +318,7 @@ for loading `PC`.
 Does **not** set the `CPSR` condition codes.
 
 
-### Format 16 - Adjust `SP`
+### Format 17 - Adjust `SP`
 
 `10101___SXXXXXXXX`
 
@@ -323,7 +333,7 @@ Does **not** set the `CPSR` condition codes.
 1 cycle. Does **not** set `CPSR` condition codes.
 
 
-### Format 17 - Multiple load/store
+### Format 18 - Multiple load/store
 
 `1011Lbbbrrrrrrrr`
 
@@ -339,7 +349,7 @@ Does **not** set the `CPSR` condition codes.
 
 The registers are stored in ascending order, with the lowest-numbered register
 at the original `[Rb]`. `Rb` is updated after this operation, with the result
-that `Rb` ends up pointing after the last word written. See Format 15 for a
+that `Rb` ends up pointing after the last word written. See Format 16 for a
 detailed example.
 
 1 cycle per register loaded or stored. It is an illegal instruction for
@@ -348,7 +358,7 @@ detailed example.
 Does **not** set the `CPSR` condition codes.
 
 
-### Format 18 - Load/store with immediate offset
+### Format 19 - Load/store with immediate offset
 
 `110LPXXXXXbbbddd`
 
@@ -368,7 +378,7 @@ Does **not** set the `CPSR` condition codes.
 1 cycle. Does **not** set `CPSR` condition codes.
 
 
-### Format 19 - Load/store with register offset
+### Format 20 - Load/store with register offset
 
 `11110LPaaabbbddd`
 
@@ -388,7 +398,7 @@ Does **not** set the `CPSR` condition codes.
 1 cycle. Does **not** set `CPSR` condition codes.
 
 
-### Format 20 - PC-relative load
+### Format 21 - PC-relative load
 
 `11101dddXXXXXXXX`
 
@@ -403,7 +413,7 @@ Remember that `PC` points at the next instruction during execution of this one.
 1 cycle. Does **not** set `CPSR` condition codes.
 
 
-### Format 21 - SP-relative load/store
+### Format 22 - SP-relative load/store
 
 `1111LdddXXXXXXXX`
 
