@@ -2,7 +2,232 @@
 
 This is a guide to using the assembler to produce code for the Risque-16.
 
-## Directives
+## Labels
+
+Labels are defined with a leading colon:
+
+```
+:foo
+  ldr r1, [r2]
+```
+
+Labels must begin with a letter or underscore, and are composed of letters,
+underscores, and digits.
+
+## Literals
+
+Numeric literals are in decimal. Hex literals begin with `0x`. Binary literals
+begin with `0b`.
+
+Literals in instructions must be preceded with a `#`.
+
+### Expressions
+
+Labels and literals can be combined into compound expressions, using the usual
+rules of parsing and precedence.
+
+`+`, `-`, `*`, `/`, `&`, `|`, `>>` and `<<` are supported, as are parentheses.
+
+
+
+## Instructions
+
+Here are guides to all the different instruction families. This is a
+programmer's view, with the instructions grouped by meaning and usage, not based
+on their binary encoding.
+
+Immediate values are given as `[US]len`, where `U7` means unsigned 7-bit, and
+`S5` means signed (2's complement) 5-bit.
+
+### Moving Data
+
+
+| Instruction    | Cycles | Flags?  | Meaning                                |
+| :---           | :---:  | :---    | :---                                   |
+| `MOV Rd, #Imm` | 1      | `NZ00`  | `Rd := Imm`                            |
+| `MOV Rd, Rs`   | 1      | `NZ00`  | `Rd := Rs`                             |
+| `MVH Rd, #Imm` | 1      | `NZ00`  | `Rd := (Rd & 0xff) | (Imm << 8)`       |
+| `MVN Rd, Rs`   | 1      | `NZ00`  | `Rd := NOT Rs` (bitwise negate)        |
+| `NEG Rd, #Imm` | 1      | `NZ00`  | `Rd := -Imm` - 2's complement negative |
+| `NEG Rd, Rs`   | 1      | `NZ00`  | `Rd := -Rs` 2's complement negation    |
+| `XSR Rd`       | 2      | Special | Exchange `SPSR` and `Rd`               |
+
+Note that the two-instruction sequence `MOV; MVH` suffices to load a full 16-bit
+value into a register.
+
+Assemblers should allow `MOV Rd, #imm` with any immediate, even one that's too
+large for a single `MOV`, and assemble it as some combination of `MOV`, `NEG`,
+`XOR` or `MVH`, whatever is most efficient.
+
+
+### Arithmetic
+
+| Instruction        | Cycles | Flags? | Meaning                     |
+| :---               | :---:  | :---   | :---                        |
+| `ADD Rd, #Imm`     | 1      | `NZCV` | `Rd := Rd + Imm`            |
+| `ADD Rd, Ra, Rb`   | 1      | `NZCV` | `Rd := Ra + Rb`             |
+| `ADC Rd, Ra, Rb`   | 1      | `NZCV` | `Rd := Ra + Rb + C-bit`     |
+| `SUB Rd, #Imm`     | 1      | `NZCV` | `Rd := Rd - Imm`            |
+| `SUB Rd, Ra, Rb`   | 1      | `NZCV` | `Rd := Ra - Rb`             |
+| `SBC Rd, Ra, Rb`   | 1      | `NZCV` | `Rd := Ra - Rb - NOT C-bit` |
+| `MUL Rd, #Imm`     | 4      | `NZCV` | `Rd := Rd * Imm`            |
+| `MUL Rd, Ra, Rb`   | 1      | `NZCV` | `Rd := Ra * Rb`             |
+| `ADD Rd, PC, #Imm` | 1      | `NZCV` | `Rd := PC + Imm`            |
+| `ADD Rd, SP, #Imm` | 1      | `NZCV` | `Rd := SP + Imm`            |
+| `ADD SP, #Imm`     | 1      | `----` | `SP := SP + Imm`            |
+| `SUB SP, #Imm`     | 1      | `----` | `SP := SP - Imm`            |
+
+Remember that `PC` points at the instruction after this one.
+
+
+### Bitwise Arithmetic
+
+| Instruction      | Cycles | Flags? | Meaning                        |
+| :---             | :---:  | :---   | :---                           |
+| `LSL Rd, Ra, Rb` | 1      | `NZC0` | `Rd := Ra <<  Rb`              |
+| `LSL Rd, #Imm`   | 1      | `NZCV` | `Rd := Rd <<  Imm`             |
+| `LSR Rd, Ra, Rb` | 1      | `NZC0` | `Rd := Ra >>> Rb`              |
+| `LSR Rd, #Imm`   | 1      | `NZCV` | `Rd := Rd >>> Imm`             |
+| `ASR Rd, Ra, Rb` | 1      | `NZC0` | `Rd := Ra >>  Rb`              |
+| `ASR Rd, #Imm`   | 1      | `NZCV` | `Rd := Rd >>  Imm`             |
+| `AND Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra & Rb`                |
+| `AND Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd & Imm`               |
+| `EOR Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra | Rb`                |
+| `EOR Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd | Imm`               |
+| `XOR Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra ^ Rb`                |
+| `XOR Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd ^ Imm`               |
+| `ROR Rd, Rs`     | 1      | `NZC0` | Rotate `Rd` right by `Rs` bits |
+
+
+### Comparison
+
+These operations perform arithmetic but don't save the result anywhere - they
+just set the condition flags in `CPSR`.
+
+| Instruction    | Cycles | Flags? | Meaning                                        |
+| :---           | :---:  | :---   | :---                                           |
+| `CMP Rd, Rs`   | 1      | `NZCV` | Flags set based on `Rd - Rs`; `Rd` unchanged   |
+| `CMP Rd, #Imm` | 1      | `NZCV` | Sets flags on `Rd - Imm`; `Rd` unchanged       |
+| `CMN Rd, Rs`   | 1      | `NZCV` | Flags set based on `Rd + Rs`; `Rd` unchanged   |
+| `TST Rd, Rs`   | 1      | `NZ00` | Flags set based on `Rd AND Rs`; `Rd` unchanged |
+
+
+### Control Flow
+
+| Instruction | Cycles | Meaning                                                              |
+| :---        | :---:  | :---                                                                 |
+| `RET`       | 1      | `PC := LR`                                                           |
+| `BX Rd`     | 1      | Branch to address in `Rd`                                            |
+| `BLX Rd`    | 1      | `LR := PC`, branch to address in `Rd`                                |
+| `B   label` | 1      | Branch always                                                        |
+| `BL  label` | 1      | Branch always; `LR := PC`                                            |
+| `BEQ label` | 1 or 2 | Branch if `Z` set (equal)                                            |
+| `BNE label` | 1 or 2 | Branch if `Z` clear (not equal)                                      |
+| `BCS label` | 1 or 2 | Branch if `C` set (unsigned higher or same)                          |
+| `BCC label` | 1 or 2 | Branch if `C` clear (unsigned lower)                                 |
+| `BMI label` | 1 or 2 | Branch if `N` set (negative)                                         |
+| `BPL label` | 1 or 2 | Branch if `N` clear (positive or zero)                               |
+| `BVS label` | 1 or 2 | Branch if `V` set (overflow)                                         |
+| `BVC label` | 1 or 2 | Branch if `V` clear (no overflow)                                    |
+| `BHI label` | 1 or 2 | Branch if `C` set and `Z` clear (unsigned higher)                    |
+| `BLS label` | 1 or 2 | Branch if `C` clear or `Z` set (unsigned lower or same)              |
+| `BGE label` | 1 or 2 | Branch if `N` and `V` match (signed greater or equal)                |
+| `BLT label` | 1 or 2 | Branch if `N` and `V` differ (signed less than)                      |
+| `BGT label` | 1 or 2 | Branch if `Z` clear, and `N` and `V` match (signed greater than)     |
+| `BLE label` | 1 or 2 | Branch if `Z` set, or `N` and `V` differ (signed less than or equal) |
+
+Instruction pre-fetching assumes branches will succeed, so they take 1 cycle on
+success. They cost 2 cycles when they fail.
+
+All of these (except `BX` and `BLX`) take either a relative offset or an
+absolute address in the next word. Assemblers should take care of this on their
+own, but programmers should be aware of this. (The encoding is to set the
+relative branch to 0, and make the next word the absolute target address.)
+
+
+#### On Returns
+
+The usual flow for a subroutine call is to use `BL(X)` to enter it, which sets
+`LR` to the return address. If the subroutine is saving registers to the stack,
+it saves `LR` with them, and pops it into `PC` to return.
+
+However, a simple subroutine that doesn't use `BL(X)` to make any calls can use
+`RET` to load `PC` directly from `LR, which is faster and simpler.
+
+
+### Load and Store
+
+None of these modify the flags.
+
+These come in three flavours: indexing, post-incrementing, and `SP`-relative.
+
+| Instruction          | Cycles | Meaning                                             |
+| :---                 | :---   | :---                                                |
+| `LDR Rd, [Rb], #inc` | 1      | Load `Rd` from `[Rb]`, then increment `Rb` by `inc` |
+| `STR Rd, [Rb], #inc` | 1      | Store `Rd` at `[Rb]`, then increment `Rb` by `inc`  |
+| `LDR Rd, [Rb, #inc]` | 1      | Load `Rd` from `[Rb+inc]` (`Rb` unchanged)          |
+| `STR Rd, [Rb, #inc]` | 1      | Store `Rd` at `[Rb+inc]` (`Rb` unchanged)           |
+| `LDR Rd, [Rb, Ra]`   | 2      | Load `Rd` from `[Rb+Ra]` (`Rb`, `Ra` unchanged)     |
+| `STR Rd, [Rb, Ra]`   | 2      | Store `Rd` at `[Rb+Ra]` (`Rb`, `Ra` unchanged)      |
+| `LDR Rd, [SP, #inc]` | 1      | Load `Rd` from `[Rb+Ra]` (`Rb`, `Ra` unchanged)     |
+| `STR Rd, [SP, #inc]` | 1      | Store `Rd` at `[Rb+Ra]` (`Rb`, `Ra` unchanged)      |
+
+
+### Hardware
+
+| Instruction | Cycles | Meaning                                                |
+| :---        | :---:  | :---                                                   |
+| `HWN Rd`    | 4      | `Rd := # of connected devices`                         |
+| `HWQ Rd`    | 4      | Sets `r0` - `r4` to the device info for device `Rd`.   |
+|             |        | (`r1:r0` = ID, `r2` = version, `r4:r3` = manufacturer) |
+| `HWI Rd`    | 4      | Sends a hardware interrupt to device `Rd`.             |
+
+
+### Interrupts
+
+| Instruction | Cycles | Flags?  | Meaning                                             |
+| :---        | :---:  | :---    | :---                                                |
+| `SWI #U8`   | 4      | No      | Triggers a `SWI` with code `U8`.                    |
+| `SWI Rd`    | 4      | No      | Triggers a `SWI` with code in `Rd`.                 |
+| `RFI`       | 1      | Special | Returns from an interrupt: `CPSR := SPSR`, pop `r0` |
+
+### Status Register
+
+| Instruction | Cycles | Flags? | Meaning |
+| :--- | :---: | :--- | :--- |
+| `IFS` | 1 | Special | Sets `I` in `CPSR`; doesn't change condition codes. |
+| `IFC` | 1 | Special | Clears `I` in `CPSR`; doesn't change condition codes. |
+| `XSR Rd` | 2 | No | Exchanges `SPSR` with `Rd` |
+
+Be careful with `XSR`, and in particular whether it might enable or disable
+interrupts.
+
+
+### Multiple Load/Store
+
+`Rlist` is a comma-separated list of general-purpose registers (`r0` to `r7`).
+
+Their order in the list is irrelevant; they always get stored in ascending order.
+
+| Instruction           | Cycles     | Flags? | Meaning                                                                          |
+| :---                  | :---:      | :---   | :---                                                                             |
+| `PUSH { Rlist }`      | 1 each     | No     | Writes registers ascending in memory, into the stack.                            |
+| `PUSH { Rlist, LR }`  | 1 each     | No     | Writes registers ascending in memory, into the stack.                            |
+| `POP { Rlist }`       | 1 each     | No     | Loads registers from the stack.                                                  |
+| `POP { Rlist, PC }`   | 1 + 1 each | No     | Loads registers from the stack, including PC                                     |
+| `STMIA Rb, { Rlist }` | 1 each     | No     | Store registers from `Rlist` starting at `[Rb]`. `Rb` points after the last one. |
+| `LDMIA Rb, { Rlist }` | 1 each     | No     | Loads registers from `Rlist` starting at `[Rb]`. `Rb` points after the last one. |
+
+Note that `POP` with `PC` costs 1 extra cycle (due to prefetch failure).
+
+
+### Miscellany
+
+| Instruction      | Cycles | Flags? | Meaning      |
+| :---             | :---:  | :---   | :---         |
+| `POPSP`          | 1      | `----` | `SP := [SP]` |
+
+## Assembler Directives
 
 These directives aim to be compatible with
 [DASM](https://github.com/techcompliant/DASM).
@@ -114,174 +339,37 @@ expands to
 
 
 
-## Labels
+## Recommendations to Programmers
 
-Labels are defined with a trailing colon:
+This section is "non-normative": it is composed of suggestions, not a strict
+specification.
 
-```
-foo:
-  ldr r1, [r2]
-```
+- Use `.org` directives to set up the reset and interrupt vectors:
+    ```
+    ; Reset vector
+    b main
 
-Labels must begin with a letter or underscore, and are composed of letters,
-underscores, and digits.
+    .org 8  ; Interrupt vector
+    b interrupt_handler
 
-## Literals
-
-Numeric literals are in decimal. Hex literals begin with `0x`. Binary literals
-begin with `0b`.
-
-Literals in instructions must be preceded with a `#`.
-
-### Expressions
-
-Labels and literals can be combined into compound expressions, using the usual
-rules of parsing and precedence.
-
-`+`, `-`, `*`, `/`, `&`, `|`, `>>` and `<<` are supported, as are parentheses.
-
-
-
-## Instructions
-
-Here are guides to all the different instruction families. This is a
-programmer's view, with the instructions grouped by meaning and usage, not based
-on their binary encoding.
-
-Immediate values are given as `[US]length`, where `U7` means unsigned 7-bit, and
-`S5` means signed (2's complement) 5-bit.
-
-### Arithmetic and Moves
-
-| Instruction | Cycles | Flags? | Meaning |
-| :--- | :---: | :--- | :--- |
-| `ADC Rd, Rs` | 1 | Yes | `Rd := Rd + Rs + C-bit` |
-| `ADD Rd, #U8` | 1 | Yes | `Rd := Rd + U8` |
-| `ADD Rd, PC, #U8` | 1 | **No** | `Rd := PC + U8`, `PC` unchanged. |
-| `ADD Rd, Ra, #U3` | 1 | Yes | `Rd := Ra + U3` |
-| `ADD Rd, Ra, Rb` | 1 | Yes | `Rd := Ra + Rb` |
-| `ADD Rd, SP, #U8` | 1 | **No** | `Rd := SP + U8`, `SP` unchanged. |
-| `ADD SP, #U7` | 1 | No | `SP := SP + U7` |
-| `AND Rd, Rs` | 1 | Yes | `Rd := Rd AND Rs` |
-| `ASR Rd, Rs, #U5` | 1 | Yes | Shift `Rs` right arithmetically by `U5`, store in `Rd`. |
-| `ASR Rd, Rs` | 1 | Yes | `Rd := Rd ASR Rs` |
-| `BIC Rd, Rs` | 1 | Yes | `Rd := Rd AND NOT Rs` (**bi**t **c**lear) |
-| `CMN Rd, Rs` | 1 | Yes | Set condition codes based on `Rd + Rs` |
-| `CMP Rd, #U8` | 1 | Yes | Set condition codes based on `Rd - U8` |
-| `CMP Rd, Rs` | 1 | Yes | Set condition codes based on `Rd - Rs` |
-| `EOR Rd, Rs` | 1 | Yes | `Rd := Rd EOR Rs` |
-| `LSL Rd, Rs, #U5` | 1 | Yes | Shift `Rs` left by `U5`, store in `Rd`. |
-| `LSL Rd, Rs` | 1 | Yes | `Rd := Rd << Rs` |
-| `LSR Rd, Rs, #U5` | 1 | Yes | Shift `Rs` right logically by `U5`, store in `Rd`. |
-| `LSR Rd, Rs` | 1 | Yes | `Rd := Rd >> Rs` |
-| `MOV Rd, #U8` | 1 | Yes | `Rd := U8` |
-| `MUL Rd, Rs` | 4 | Yes | `Rd := Rd * Rs` |
-| `MVN Rd, Rs` | 1 | Yes | `Rd := NOT Rs` (bitwise negate, not integer negative) |
-| `NEG Rd, Rs` | 1 | Yes | `Rd := -Rs` (arithmetic negation) |
-| `ORR Rd, Rs` | 1 | Yes | `Rd := Rd OR Rs` |
-| `ROR Rd, Rs` | 1 | Yes | `Rd := Rd ROR Rs` (rotate `Rd`'s bits rightward by `Rs`) |
-| `SBC Rd, Rs` | 1 | Yes | `Rd := Rd - Rs - NOT C-bit` |
-| `SUB Rd, #U8` | 1 | Yes | `Rd := Rd - U8` |
-| `SUB Rd, Ra, #U3` | 1 | Yes | `Rd := Ra - U3` |
-| `SUB Rd, Ra, Rb` | 1 | Yes | `Rd := Ra - Rb` |
-| `SUB SP, #U7` | 1 | No | `SP := SP - U7` |
-| `TST Rd, Rs` | 1 | Yes | Set condition codes based on `Rd AND Rs` |
-
-
-### Unconditional Branches
-
-| Instruction | Cycles | Flags? | Branch when |
-| :--- | :---: | :--- | :--- |
-| `B label` | 1 | No | `PC := PC + offset` (Range is 11-bit signed, +1023 to -1024) |
-| `BL label` | 1 | No | `PC := label` (Unlimited range, maybe 2 instructions.) |
-| `BX Ra` | 1 | No | `PC := Ra` |
-| `BLX Ra` | 1 | No | `LR := PC` then `PC := Ra` |
-
-
-### Conditional Branches
-
-These are all PC-relative branches, by an 8-bit signed offset (+127 to -128).
-Therefore they're for local labels, loops and so on, not for long jumps and
-function calls.
-
-None of these change the condition flags. Each takes 1 cycle on success, and 2
-on failure.
-
-| Instruction | Cycles | Branch when |
-| :--- | :---: | :--- |
-| `BEQ label` | 1/2 | `Z` set (equal) |
-| `BNE label` | 1/2 | `Z` clear (not equal) |
-| `BCS label` | 1/2 | `C` set (unsigned higher or same) |
-| `BCC label` | 1/2 | `C` clear (unsigned lower) |
-| `BMI label` | 1/2 | `N` set (negative) |
-| `BPL label` | 1/2 | `N` clear (positive or zero) |
-| `BVS label` | 1/2 | `V` set (overflow) |
-| `BVC label` | 1/2 | `V` clear (no overflow) |
-| `BHI label` | 1/2 | `C` set and `Z` clear (unsigned higher) |
-| `BLS label` | 1/2 | `C` clear or `Z` set (unsigned lower or same) |
-| `BGE label` | 1/2 | `N` and `V` match (signed greater or equal) |
-| `BLT label` | 1/2 | `N` and `V` differ (signed less than) |
-| `BGT label` | 1/2 | `Z` clear, and `N` and `V` match (signed greater than) |
-| `BLE label` | 1/2 | `Z` set, or `N` and `V` differ (signed less than or equal) |
-
-### Hardware
-
-| Instruction | Cycles | Meaning |
-| :--- | :---: | :--- |
-| `HWN Rd` | 4 | `Rd := # of connected devices` |
-| `HWQ Rd` | 4 | Sets `r0` - `r4` to the device info for device `Rd`. |
-| | | (`r1:r0` = ID, `r2` = version, `r4:r3` = manufacturer) |
-| `HWI Rd` | 4 | Sends a hardware interrupt to device `Rd`. |
-
-### Interrupts
-
-| Instruction | Cycles | Flags? | Meaning |
-| :--- | :---: | :--- | :--- |
-| `SWI #U8` | 2 | No | Triggers a `SWI` with code `U8`. |
-| `RFI` | 1 | Special | Returns from an IRQ: `CPSR := SPSR_irq`, pop `r0` from `SP_irq`. |
-| `RSI` | 1 | Special | Returns from a SWI: `CPSR := SPSR_swi`, `PC := LR_swi` |
-
-### Status Register
-
-| Instruction | Cycles | Flags? | Meaning |
-| :--- | :---: | :--- | :--- |
-| `IFS` | 1 | Special | Sets `I` in `CPSR`; doesn't change condition codes. |
-| `IFC` | 1 | Special | Clears `I` in `CPSR`; doesn't change condition codes. |
-| `MRS Rd` | 1 | No | Moves `Rd` to the `SPSR` for the current mode. Illegal in User mode! |
-| `MSR Rd` | 1 | No | Moves the `SPSR` for the current mode to `Rd`. Illegal in User mode! |
-
-### Load/Store
-
-| Instruction | Cycles | Flags? | Meaning |
-| :--- | :---: | :--- | :--- |
-| `LDR Rd, [Rb, #U5]` | 1 | No | `Rd := [Rb + U5]`, `Rb` unchanged. |
-| `LDR Rd, [Rb], #U5]` | 1 | No | `Rd := [Rb]`, `Rb := Rb + U5` |
-| `LDR Rd, [Rb, Ra]` | 1 | No | `Rd := [Rb + Ra]`, `Rb` unchanged. |
-| `LDR Rd, [Rb], Ra` | 1 | No | `Rd := [Rb]`, `Rb := Rb + Ra` |
-| `STR Rd, [Rb, #U5]` | 1 | No | `[Rb + U5] := Rd`, `Rb` unchanged. |
-| `STR Rd, [Rb], #U5]` | 1 | No | `[Rb] := Rd`, `Rb := Rb + U5` |
-| `STR Rd, [Rb, Ra]` | 1 | No | `[Rb + Ra] := Rd`, `Rb` unchanged. |
-| `STR Rd, [Rb], Ra` | 1 | No | `[Rb] := Rd`, `Rb := Rb + Ra` |
-| `LDR Rd, [PC, #U8]` | 1 | No | `Rd := [PC + U8]`, `PC` unchanged. |
-| `LDR Rd, [SP, #U8]` | 1 | No | `Rd := [SP + U8]`, `SP` unchanged. |
-| `STR Rd, [SP, #U8]` | 1 | No | `[SP + U8] := Rd`, `SP` unchanged. |
-
-### Multiple Load/Store
-
-`Rlist` is a comma-separated list of general-purpose registers (`r0` to `r7`).
-
-Their order in the list is irrelevant; they always get stored in ascending order.
-
-| Instruction | Cycles | Flags? | Meaning |
-| :--- | :---: | :--- | :--- |
-| `PUSH { Rlist }` | 1 each | No | Writes registers ascending in memory, into the stack. |
-| `PUSH { Rlist, LR }` | 1 each | No | Writes registers ascending in memory, into the stack. |
-| `POP { Rlist }` | 1 each | No | Loads registers from the stack. |
-| `POP { Rlist, PC }` | 1 + 1 each | No | Loads registers from the stack, including PC |
-| `STMIA Rb!, { Rlist }` | 1 each | No | Store registers from `Rlist` starting at the address in `Rb`. Moves `Rb` to after the last one. |
-| `LDMIA Rb!, { Rlist }` | 1 each | No | Loads registers from `Rlist` starting at the address in `Rb`. Moves `Rb` to after the last one. |
-
-
-
-
-
+    .org 0x20 ; Space up to 0x1f is reserved for future vectors.
+    ; Rest of the code goes here.
+    ```
+- Decide on a straightforward calling convention, and use it for all functions.
+    One suggestion:
+    - Use `r0`, `r1`, `r2`, ... to pass parameters.
+    - Use `r0` for return values.
+    - `r0`, `r1`, and `r2` can always be clobbered by the callee.
+    - `r3` and higher must be preserved **unless** they were used as arguments
+        - Arguments can always be clobbered.
+- Use `PUSH` and `POP`, including for `LR` and `PC`! They make functions much easier to read.
+- Take advantage of the multiple load/store instructions to read the fields of a
+  structure. If you know you're going to access several fields, just load them
+  all in one instruction.
+    - Alternatively, use the immediate-indexing formats.
+- Take advantage of post-increment on `LDR` and `STR` for fast loops!
+- Remember that conditional branches are fast when they succeed. Each test has
+  its inverse, so write loops that succeed N times and fail once.
+- Read `SP` with `add r0, sp, #0`. Write `SP` by pushing the new value, then
+  `POPSP`.
+- Read `PC` with `add r0, pc, #0`. Write `PC` with `BX`.

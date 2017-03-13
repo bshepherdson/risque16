@@ -31,13 +31,13 @@ See below for the details of interrupt handling.
 
 `CPSR` has the form `________ I___NZCV`
 
-| Flag | Name | Meaning |
-| :---: | :--- | :--- |
-| `I` | Interrupt Enable | Set to permit interrupts to fire, clear to disallow them. |
-| `N` | Negative | Set to bit 15 of results, so `N` is 1 if the signed value is negative. |
-| `Z` | Zero | Set if the result is zero (often denotes equality in a comparison). |
-| `C` | Carry | More complicated. See below. |
-| `V` | Overflow | Set is a signed overflow occurred. Otherwise left alone. |
+| Flag  | Name             | Meaning                                                                |
+| :---: | :---             | :---                                                                   |
+| `I`   | Interrupt Enable | Set to permit interrupts to fire, clear to disallow them.              |
+| `N`   | Negative         | Set to bit 15 of results, so `N` is 1 if the signed value is negative. |
+| `Z`   | Zero             | Set if the result is zero (often denotes equality in a comparison).    |
+| `C`   | Carry            | More complicated. See below.                                           |
+| `V`   | Overflow         | Set is a signed overflow occurred. Otherwise left alone.               |
 
 Carry has some tricky interactions, summarized here:
 
@@ -68,7 +68,7 @@ There is no guarantee of forward progress in the "real", non-interrupt program.
 The same instruction can be repeatedly interrupted, forever.
 
 Interrupts can be nested, with care. `SPSR` would get overwritten by the second
-interrupt, but you can save and restore it using `MRS` and `MSR`.
+interrupt, but you can save and restore it using `XSR`.
 
 ### Interrupt Handling
 
@@ -95,7 +95,7 @@ There are two "vectors" on the Risque-16:
 
 Memory up to `$0020` is reserved; your code should start at or after `$0020`.
 
-Since there's not a lot of space in any of them, it's expected that they'll
+Since there's not a lot of space in these vectors, it's expected that they'll
 contain either an immediate return, or a jump to more complex code.
 
 ## Startup State
@@ -112,12 +112,18 @@ On a reset, the processor performs the following operations:
 
 ## Differences from Thumb
 
+The instruction set and functionality is inspired by the ARM architecture, and
+especially the 16-bit Thumb subset.
+
+- Heavily reworked instruction encoding.
+    - This is slightly less efficient (eg. fewer bits available for literals)
+    - But it's also much, much simpler - 5 formats with clear layout, instead of
+      20 with a confused tangle.
 - 16-bit addressing is used everywhere - no byte addressing.
 - Registers and words are 16-bit, not 32-bit.
 - There are no "high" registers, just `r0-7`, `sp`, `pc` and `lr`.
-- No CPU modes, and interrupt handling has been made simpler and
+- No CPU modes, and interrupt handling has been made much simpler and
   DCPU-compatible.
-- Instruction set and encoding have been re-done to be a lot simpler.
 
 
 ## Timing and Pipelining
@@ -128,5 +134,6 @@ memory operations.
 The processor accordingly has a short pipeline. During the execution of one
 instruction, `PC` points at the next instruction.
 
-Most instructions take 1 or 2 cycles, as noted in their descriptions.
+Most instructions take 1 or 2 cycles, as noted in their descriptions. `MUL`
+takes 4, as do several that work with interrupts or hardware.
 
