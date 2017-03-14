@@ -92,8 +92,8 @@ Remember that `PC` points at the instruction after this one.
 | `ASR Rd, #Imm`   | 1      | `NZCV` | `Rd := Rd >>  Imm`             |
 | `AND Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra & Rb`                |
 | `AND Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd & Imm`               |
-| `EOR Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra | Rb`                |
-| `EOR Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd | Imm`               |
+| `ORR Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra | Rb`                |
+| `ORR Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd | Imm`               |
 | `XOR Rd, Ra, Rb` | 1      | `NZ00` | `Rd := Ra ^ Rb`                |
 | `XOR Rd, #Imm`   | 1      | `NZ00` | `Rd := Rd ^ Imm`               |
 | `ROR Rd, Rs`     | 1      | `NZC0` | Rotate `Rd` right by `Rs` bits |
@@ -119,8 +119,8 @@ just set the condition flags in `CPSR`.
 | `RET`       | 1      | `PC := LR`                                                           |
 | `BX Rd`     | 1      | Branch to address in `Rd`                                            |
 | `BLX Rd`    | 1      | `LR := PC`, branch to address in `Rd`                                |
-| `B   label` | 1      | Branch always                                                        |
-| `BL  label` | 1      | Branch always; `LR := PC`                                            |
+| `B   label` | 1 or 2 | Branch always                                                        |
+| `BL  label` | 1 or 2 | Branch always; `LR := PC`                                            |
 | `BEQ label` | 1 or 2 | Branch if `Z` set (equal)                                            |
 | `BNE label` | 1 or 2 | Branch if `Z` clear (not equal)                                      |
 | `BCS label` | 1 or 2 | Branch if `C` set (unsigned higher or same)                          |
@@ -137,12 +137,14 @@ just set the condition flags in `CPSR`.
 | `BLE label` | 1 or 2 | Branch if `Z` set, or `N` and `V` differ (signed less than or equal) |
 
 Instruction pre-fetching assumes branches will succeed, so they take 1 cycle on
-success. They cost 2 cycles when they fail.
+success. They cost 2 cycles when they fail. They also cost 2 cycles when they
+need the long form. Failure in the long form still only costs 2; the extra word
+doesn't need to be read on failure.
 
 All of these (except `BX` and `BLX`) take either a relative offset or an
-absolute address in the next word. Assemblers should take care of this on their
-own, but programmers should be aware of this. (The encoding is to set the
-relative branch to 0, and make the next word the absolute target address.)
+absolute address in the next word. Assemblers should take care of this, but
+but programmers should be aware of it. (The encoding is to set the relative
+branch to -1, and make the next word the absolute target address.)
 
 
 #### On Returns

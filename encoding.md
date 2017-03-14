@@ -49,7 +49,7 @@ opcode is in the `ddd` slot.
 | `$8` | `LSR Rd, #Imm`     | 1      | `NZCV` | `Rd := Rd >>> Imm` |
 | `$9` | `ASR Rd, #Imm`     | 1      | `NZCV` | `Rd := Rd >>  Imm` |
 | `$a` | `AND Rd, #Imm`     | 1      | `NZ00` | `Rd := Rd & Imm` |
-| `$b` | `EOR Rd, #Imm`     | 1      | `NZ00` | `Rd := Rd | Imm` |
+| `$b` | `ORR Rd, #Imm`     | 1      | `NZ00` | `Rd := Rd | Imm` |
 | `$c` | `XOR Rd, #Imm`     | 1      | `NZ00` | `Rd := Rd ^ Imm` |
 | `$d` | `ADD Rd, PC, #Imm` | 1      | `NZCV` | `Rd := PC + Imm` (PC points after this instruction) |
 | `$e` | `ADD Rd, SP, #Imm` | 1      | `NZCV` | `Rd := SP + Imm` |
@@ -94,7 +94,7 @@ does that by settings its opcode to 0.
 | `$07` | `LSR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>> Rb`                 |
 | `$08` | `ASR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>  Rb`                 |
 | `$09` | `AND Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra & Rb`                   |
-| `$0a` | `EOR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra | Rb`                   |
+| `$0a` | `ORR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra | Rb`                   |
 | `$0b` | `XOR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra ^ Rb`                   |
 
 
@@ -148,12 +148,12 @@ helper for when you don't need to save `LR` to the stack.
 
 `101ooooXXXXXXXXX`
 
-The literal is an 8-bit signed offset. It's relative to the next instruction.
+The literal is an 9-bit signed offset. It's relative to the next instruction.
 
 | Op   | Assembly    | Cycles | Meaning |
 | :--- | :---        | :---   | :---    |
-| `$0` | `B   label` | 1      | Branch always |
-| `$1` | `BL  label` | 1      | Branch always; `LR := PC` |
+| `$0` | `B   label` | 1 or 2 | Branch always |
+| `$1` | `BL  label` | 1 or 2 | Branch always; `LR := PC` |
 | `$2` | `BEQ label` | 1 or 2 | Branch if `Z` set (equal) |
 | `$3` | `BNE label` | 1 or 2 | Branch if `Z` clear (not equal) |
 | `$4` | `BCS label` | 1 or 2 | Branch if `C` set (unsigned higher or same) |
@@ -169,9 +169,18 @@ The literal is an 8-bit signed offset. It's relative to the next instruction.
 | `$e` | `BGT label` | 1 or 2 | Branch if `Z` clear, and `N` and `V` match (signed greater than) |
 | `$f` | `BLE label` | 1 or 2 | Branch if `Z` set, or `N` and `V` differ (signed less than or equal) |
 
+A branch offset is needed that signals we're using the long form.
 
-Since a branch offset of 0 isn't useful (it's the same as no branch as all), it
-actually means that the next word gives the absolute address to branch to.
+Using 0 doesn't work, it can cause an infinite loop. If the actual target is the
+next word, the diff would be 0 but we need to use the long form. That makes the
+offset 1, not 0. Then we can use the short form, etc.
+
+So instead we use -1. That would loop back to the branch itself, but that can
+be encoded as the long form without trouble.
+
+Branches take 1 cycle on success in short form. Long-form success, or failure
+in either form, takes 2 cycles.
+
 
 
 ## Memory-access Format
@@ -214,12 +223,12 @@ the least significant bit, and `r7` to the most significant.
 For `PUSH` and `POP`, `bbb` is actually just a single bit `00P`, which indicates
 that `LR` should be saved on `PUSH`, or `PC` loaded on `POP`.
 
-| Op   | Assembly             | Meaning |
-| :--- | :---                 | :---    |
-| `$0` | `PUSH  {r0, r3, lr}` | Store `r0`, `r3`, etc. at `[SP]` |
-| `$1` | `POP   {r0, r3, pc}` | Load `r0`, `r3`, etc. from `[SP]` |
-| `$2` | `LDMIA Rb, {r0, r3}` | Store `r0`, `r3`, etc. at `[Rb]` |
-| `$3` | `STMIA Rb, {r0, r3}` | Load `r0`, `r3`, etc. from `[Rb]` |
+| Op   | Assembly             | Meaning                           |
+| :--- | :---                 | :---                              |
+| `$0` | `POP   {r0, r3, pc}` | Load `r0`, `r3`, etc. from `[SP]` |
+| `$1` | `PUSH  {r0, r3, lr}` | Store `r0`, `r3`, etc. at `[SP]`  |
+| `$2` | `LDMIA Rb, {r0, r3}` | Load `r0`, `r3`, etc. from `[Rb]` |
+| `$3` | `STMIA Rb, {r0, r3}` | Store `r0`, `r3`, etc. at `[Rb]`  |
 
 ### Push and Pop
 
