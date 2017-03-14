@@ -47,7 +47,7 @@ func (p *Parser) unscan() {
 // NEWLINE is not a whitespace token according to this; those are important.
 func (p *Parser) scanIgnoreWhitespace() (Token, string) {
 	tok, lit := p.scan()
-	if tok == WS {
+	for tok == WS {
 		tok, lit = p.scan()
 	}
 	return tok, lit
@@ -70,17 +70,17 @@ func (p *Parser) Parse() (*AST, error) {
 			lines = append(lines, l)
 		} else if tok == IDENT { // Should be an instruction.
 			upper := strings.ToUpper(lit)
-			if _, ok := instructions[upper]; ok {
-				l, err := p.parseInstruction(upper)
-				if err != nil {
-					return nil, p.wrapError(err)
-				}
-				lines = append(lines, l)
+			l, err := p.parseInstruction(upper)
+			if err != nil {
+				return nil, p.wrapError(err)
 			}
+			lines = append(lines, l)
 		} else if tok == COLON { // Label definition
 			tok, lit = p.scan() // WS not allowed.
-			if tok != IDENT {
+			if tok == IDENT {
 				lines = append(lines, &LabelDef{lit})
+			} else {
+				return nil, p.wrapError(fmt.Errorf("Bad label: '%s'", lit))
 			}
 		} else if tok == NEWLINE {
 			continue
@@ -108,7 +108,7 @@ func (p *Parser) parseDirective() (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, lit := p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s '%s' at end of line", tokenNames[t], lit)
+			return nil, fmt.Errorf("Unexpected %s '%s' at end of DAT", tokenNames[t], lit)
 		}
 		return &DatBlock{args}, nil
 
@@ -119,7 +119,7 @@ func (p *Parser) parseDirective() (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, lit := p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s '%s' at end of line", tokenNames[t], lit)
+			return nil, fmt.Errorf("Unexpected %s '%s' at end of ORG", tokenNames[t], lit)
 		}
 		return &Org{expr}, nil
 
@@ -133,7 +133,7 @@ func (p *Parser) parseDirective() (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, lit := p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s '%s' at end of line", tokenNames[t], lit)
+			return nil, fmt.Errorf("Unexpected %s '%s' at end of FILL", tokenNames[t], lit)
 		}
 		return &FillBlock{values[1], values[0]}, nil
 
@@ -145,7 +145,7 @@ func (p *Parser) parseDirective() (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, lit := p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s '%s' at end of line", tokenNames[t], lit)
+			return nil, fmt.Errorf("Unexpected %s '%s' at end of RESERVE", tokenNames[t], lit)
 		}
 		return &FillBlock{&Constant{0, loc}, expr}, nil
 
@@ -165,7 +165,7 @@ func (p *Parser) parseDirective() (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, lit := p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s '%s' at end of line", tokenNames[t], lit)
+			return nil, fmt.Errorf("Unexpected %s '%s' at end of DEFINE", tokenNames[t], lit)
 		}
 		return &SymbolDef{lit, expr}, nil
 
@@ -191,6 +191,7 @@ func (p *Parser) parseSimpleExpr() (Expression, error) {
 		}
 		return &Constant{uint16(n), loc}, nil
 	}
+	p.unscan()
 	return nil, fmt.Errorf("Found %s while parsing expression", tokenNames[tok])
 }
 
@@ -316,8 +317,10 @@ func (p *Parser) parseArgList(opcode string) ([]*Arg, error) {
 				args = append(args, &Arg{kind: AT_PC})
 			} else if t == SP {
 				args = append(args, &Arg{kind: AT_SP})
+			} else if t == NEWLINE || t == EOF {
+				break
 			} else {
-				// Found something unexpected.lit
+				// Found something unexpected.
 				return nil, fmt.Errorf("Expected argument, but found %s", tokenNames[t])
 			}
 			done = true
@@ -325,7 +328,7 @@ func (p *Parser) parseArgList(opcode string) ([]*Arg, error) {
 
 		// Now we expect a comma or newline.
 		t, _ := p.scanIgnoreWhitespace()
-		if t == NEWLINE {
+		if t == NEWLINE || t == EOF {
 			break
 		} else if t != COMMA {
 			return nil, fmt.Errorf("Expected comma or end of arg list, but found %s", tokenNames[t])
@@ -341,7 +344,7 @@ func (p *Parser) parsePushPop(opcode string) (Assembled, error) {
 	}
 	t, _ := p.scanIgnoreWhitespace()
 	if t != NEWLINE {
-		return nil, fmt.Errorf("Unexpected %s at end of line", tokenNames[t])
+		return nil, fmt.Errorf("Unexpected %s at end of %s", tokenNames[t], opcode)
 	}
 	return &StackOp{regs, opcode == "PUSH", lrpc, 0xffff}, nil
 }
@@ -350,10 +353,6 @@ func (p *Parser) parseMultiStoreLoad(opcode string) (Assembled, error) {
 	base, err := p.parseReg()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse base register of %s: %v", opcode, err)
-	}
-
-	if !p.consume(BANG) {
-		return nil, fmt.Errorf("Bang (!) required after %s base register", opcode)
 	}
 
 	if !p.consumeComma() {
@@ -371,7 +370,7 @@ func (p *Parser) parseMultiStoreLoad(opcode string) (Assembled, error) {
 
 	t, _ := p.scanIgnoreWhitespace()
 	if t != NEWLINE {
-		return nil, fmt.Errorf("Unexpected %s at end of line", tokenNames[t])
+		return nil, fmt.Errorf("Unexpected %s at end of line", tokenNames[t], opcode)
 	}
 	return &StackOp{regs, opcode == "STMIA", false, base}, nil
 }
@@ -399,47 +398,34 @@ func (p *Parser) parseRlist(opcode string, pclrAllowed bool) (uint16, bool, erro
 
 	// Now a comma-separated list of regs and PC or LR.
 	for {
-		r, err := p.parseReg()
-		if err == nil && 0 <= r && r < 8 {
-			// Include the reg and continue.
-			regs = regs | (1 << uint(r))
-			continue
-		} else if r < 0 || r >= 8 {
-			return 0, false, fmt.Errorf("No such register: r%d (only r0-r7)", r)
-		}
-
-		// If we're still here, try parsing PC or LR.
-		t := ILLEGAL
-		if pclrAllowed {
-			t, _ := p.scanIgnoreWhitespace()
-			if t == LR {
-				if opcode == "POP" || opcode == "LDMIA" {
-					return 0, false, fmt.Errorf("LR not allowed in %s; maybe you meant PC?", opcode)
-				}
-				pclr = true
-			} else if t == PC {
-				if opcode == "PUSH" || opcode == "STMIA" {
-					return 0, false, fmt.Errorf("PC not allowed in %s; maybe you meant LR?", opcode)
-				}
-				pclr = true
-			} else {
-				// Bad next token.
-				return 0, false, fmt.Errorf("Expected register, PC or LR in register list, but found %s", tokenNames[t])
+		t, _ := p.scanIgnoreWhitespace()
+		switch t {
+		case REGISTER:
+			p.unscan()
+			r, err := p.parseReg()
+			if err == nil && 0 <= r && r < 8 {
+				regs = regs | (1 << uint(r))
 			}
-		} else {
-			return 0, false, fmt.Errorf("Expected register in register list, but found %s", tokenNames[t])
+		case PC:
+			if !pclrAllowed || opcode != "POP" {
+				return 0, false, fmt.Errorf("Found PC, but PC is only allowed on POP")
+			}
+			pclr = true
+		case LR:
+			if !pclrAllowed || opcode != "PUSH" {
+				return 0, false, fmt.Errorf("Found LR, but LR is only allowed on POP")
+			}
+			pclr = true
 		}
 
-		// Now look for a comma or RBRACE.
-		if p.consume(RBRACE) {
+		// Now parse a comma, or closing brace.
+		t, lit := p.scanIgnoreWhitespace()
+		if t == RBRACE {
 			return regs, pclr, nil
+		} else if t == COMMA {
+			continue
 		}
-
-		// If not RBRACE, expect a comma.
-		if !p.consumeComma() {
-			t, _ := p.scanIgnoreWhitespace()
-			return 0, false, fmt.Errorf("Expected } or comma in register list, but found %s", tokenNames[t])
-		}
+		return 0, false, fmt.Errorf("Expected comma or } in register list, but found %s '%s'", tokenNames[t], lit)
 	}
 }
 
@@ -455,10 +441,8 @@ func (p *Parser) parseLoadStore(opcode string) (Assembled, error) {
 	// But it's one of a few possibilities:
 	// [Rb]
 	// [Rb], #lit
-	// [Rb], Ra
 	// [Rb, #lit]
 	// [Rb, Ra]
-	// [PC, #U8] - only LDR
 	// [SP, #U8]
 
 	dest, err := p.parseReg()
@@ -500,16 +484,16 @@ func (p *Parser) parseLoadStore(opcode string) (Assembled, error) {
 		}
 		if !p.consume(NEWLINE) {
 			t, _ = p.scanIgnoreWhitespace()
-			return nil, fmt.Errorf("Unexpected %s at end of line", tokenNames[t])
+			return nil, fmt.Errorf("Unexpected %s at end of %s", tokenNames[t], opcode)
 		}
 
-		return &LoadStore{opcode == "STR", dest, 0xffff, lit, 0xffff, nil, 0xffff, t == SP}, nil
+		return &LoadStore{opcode == "STR", dest, 0xffff, lit, 0xffff, nil}, nil
 	} else {
 		// Regular register.
 		p.unscan()
 		base, err := p.parseReg()
 
-		out := &LoadStore{opcode == "STR", dest, base, nil, 0xffff, nil, 0xffff, false}
+		out := &LoadStore{opcode == "STR", dest, base, nil, 0xffff, nil}
 
 		// Next is a comma or ].
 		t, _ := p.scanIgnoreWhitespace()
@@ -536,16 +520,15 @@ func (p *Parser) parseLoadStore(opcode string) (Assembled, error) {
 			// post-incrementing is real.
 			out.postLit, err = p.parseLiteral()
 			if err != nil {
-				out.postReg, err = p.parseReg()
-				if err != nil {
-					return nil, fmt.Errorf("Expected literal or register for post-increment: %v", err)
-				}
+				return nil, fmt.Errorf("Expected literal for post-increment: %v", err)
 			}
+		} else {
+			p.unscan()
 		}
 
 		t, _ = p.scanIgnoreWhitespace()
-		if t == NEWLINE {
-			return nil, fmt.Errorf("Unexpected %s at end of line", tokenNames[t])
+		if t != NEWLINE {
+			return nil, fmt.Errorf("Unexpected %s at end of %s", tokenNames[t], opcode)
 		}
 
 		return out, nil

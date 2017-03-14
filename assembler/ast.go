@@ -23,10 +23,10 @@ type LabelUse struct {
 }
 
 func (l *LabelUse) Evaluate(s *AssemblyState) uint16 {
-	value, defined := s.lookup(l.label)
-	if !defined {
-		s.resolved = false
-		return 0
+	value, _, known := s.lookup(l.label)
+	if !known {
+		asmError(l.loc, "Unknown label '%s'", l.label)
+		os.Exit(1)
 	}
 	return value
 }
@@ -105,7 +105,24 @@ type Instruction struct {
 }
 
 func (op *Instruction) Assemble(s *AssemblyState) {
-	if f, ok := instructions[op.opcode]; ok {
+	// We check for this opcode in each of the format types, and if it
+	// matches the right arguments then we assemble it thus.
+	if n, ok := rrrInstructions[op.opcode]; ok && len(op.args) == 3 &&
+		op.args[0].kind == AT_REG && op.args[1].kind == AT_REG && op.args[2].kind == AT_REG {
+		opRRR(op.loc, op.opcode, n, op.args, s)
+	} else if n, ok := rrInstructions[op.opcode]; ok && len(op.args) == 2 &&
+		op.args[0].kind == AT_REG && op.args[1].kind == AT_REG {
+		opRR(op.loc, op.opcode, n, op.args, s)
+	} else if n, ok := rInstructions[op.opcode]; ok && len(op.args) == 1 && op.args[0].kind == AT_REG {
+		opR(op.loc, op.opcode, n, op.args, s)
+	} else if n, ok := voidInstructions[op.opcode]; ok && len(op.args) == 0 {
+		opVoid(op.loc, op.opcode, n, s)
+	} else if n, ok := riInstructions[op.opcode]; ok && len(op.args) == 2 &&
+		op.args[0].kind == AT_REG && op.args[1].kind == AT_LITERAL {
+		opRI(op.loc, op.opcode, n, op.args, s)
+	} else if n, ok := branchInstructions[op.opcode]; ok && len(op.args) == 1 && op.args[0].kind == AT_LABEL {
+		opBranch(op.loc, op.opcode, n, op.args, s)
+	} else if f, ok := specialInstructions[op.opcode]; ok {
 		f(op.loc, op.opcode, op.args, s)
 	} else {
 		asmError(op.loc, "Unrecognized opcode: %s", op.opcode)
@@ -119,69 +136,49 @@ type LoadStore struct {
 	preLit  Expression
 	preReg  uint16
 	postLit Expression
-	postReg uint16
-	baseSP  bool
 }
 
 func (op *LoadStore) Assemble(s *AssemblyState) {
-	// Deal with the SP and PC special cases first.
+	// Deal with the SP special case first.
+	opcode := uint16(0)
 	if op.base == 0xffff {
 		// Always an 8-bit unsigned offset.
 		off := uint16(0)
 		if op.preLit != nil {
-			off = checkLiteral(s, op.preLit, false, 8)
+			off = checkLiteral(s, op.preLit, false, 4)
 		}
 
-		// Then check SP vs. PC, and LDR vs. STR.
-		if !op.baseSP && !op.storing { // LDR from PC
-			s.push(0xe800 | uint16(op.dest<<8) | off)
-		} else if !op.baseSP && op.storing { // STR to PC is illegal.
-			asmError("", "Can't do PC-relative STR")
-		} else {
-			storeBit := uint16(0x0800)
-			if op.storing {
-				storeBit = 0
-			}
-			s.push(0xf000 | uint16(op.dest<<8) | off | storeBit)
+		opcode = 6
+		if op.storing {
+			opcode++
 		}
+		s.push(0xc000 | (opcode << 10) | uint16(op.dest<<7) | off)
 		return
 	}
 
-	// Otherwise, standard format.
-	if op.preReg != 0xffff || op.postReg != 0xffff {
-		loadBit := uint16(0x0400)
+	if op.preReg != 0xffff {
+		opcode = 4
 		if op.storing {
-			loadBit = 0
+			opcode++
 		}
-
-		var offset uint16
-		postBit := uint16(0x0200)
-		if op.preReg != 0xffff {
-			postBit = 0
-			offset = op.preReg << 6
-		} else {
-			offset = op.postReg << 6
-		}
-
-		s.push(0xf000 | offset | loadBit | postBit | (op.base << 3) | op.dest)
-	} else {
-		loadBit := uint16(0x1000)
+		s.push(0xc000 | (opcode << 10) | (op.dest << 7) | (op.base << 4) | op.preReg)
+	} else if op.preLit != nil {
+		opcode = 2
 		if op.storing {
-			loadBit = 0
+			opcode++
 		}
-
-		var offset uint16
-		postBit := uint16(0x0800)
-		if op.preLit != nil {
-			postBit = 0
-			offset = checkLiteral(s, op.preLit, false, 5)
-		} else if op.postLit != nil {
-			offset = checkLiteral(s, op.postLit, false, 5)
-		} else {
-			offset = 0
+		value := checkLiteral(s, op.preLit, false, 4)
+		s.push(0xc000 | (opcode << 10) | (op.dest << 7) | (op.base << 4) | value)
+	} else { // Postlit, maybe 0.
+		opcode = 0
+		if op.storing {
+			opcode++
 		}
-
-		s.push(0xc000 | loadBit | postBit | (offset << 6) | (op.base << 3) | (op.dest))
+		var value uint16
+		if op.postLit != nil {
+			value = checkLiteral(s, op.postLit, false, 4)
+		}
+		s.push(0xc000 | (opcode << 10) | (op.dest << 7) | (op.base << 4) | value)
 	}
 }
 
@@ -220,23 +217,24 @@ type StackOp struct {
 func (op *StackOp) Assemble(s *AssemblyState) {
 	// If base is 0xffff then this is a PUSH/POP.
 	if op.base == 0xffff {
-		loadBit := uint16(0x0200)
+		opcode := uint16(0)
 		if op.storing {
-			loadBit = 0
+			opcode++
 		}
+
 		lrpcBit := uint16(0x0100)
 		if !op.lrpc {
 			lrpcBit = 0
 		}
 
-		s.push(0xa000 | loadBit | lrpcBit | op.regs)
+		s.push(0xe000 | (opcode << 11) | lrpcBit | op.regs)
 	} else { // LDMIA/STMIA
-		loadBit := uint16(0x0800)
+		opcode := uint16(2)
 		if op.storing {
-			loadBit = 0
+			opcode++
 		}
 
-		s.push(0xb000 | loadBit | op.regs | (op.base << 8))
+		s.push(0xe000 | (opcode << 11) | op.regs | (op.base << 8))
 	}
 }
 
@@ -257,59 +255,90 @@ type Arg struct {
 	label Expression
 }
 
-var instructions = map[string]func(string, string, []*Arg, *AssemblyState){
-	"ADC": opMathRR,
+// Instructions come in several flavours, with corresponding arguments.
+// Each of these tables holds opcodes and op numbers for the simple cases.
+// Complex cases where the arguments don't fit the standard patterns go in
+// specialInstructions (like `ADD Rd, PC, #Imm` vs. `ADD Rd, #Imm`).
+
+var riInstructions = map[string]uint16{
+	"MOV": 0x1,
+	"NEG": 0x2,
+	"CMP": 0x3,
+	"ADD": 0x4,
+	"SUB": 0x5,
+	"MUL": 0x6,
+	"LSL": 0x7,
+	"LSR": 0x8,
+	"ASR": 0x9,
+	"AND": 0xa,
+	"ORR": 0xb,
+	"XOR": 0xc,
+	"MVH": 0xf,
+}
+
+var rrrInstructions = map[string]uint16{
+	"ADD": 0x1,
+	"ADC": 0x2,
+	"SUB": 0x3,
+	"SBC": 0x4,
+	"MUL": 0x5,
+	"LSL": 0x6,
+	"LSR": 0x7,
+	"ASR": 0x8,
+	"AND": 0x9,
+	"ORR": 0xa,
+	"XOR": 0xb,
+}
+
+var rrInstructions = map[string]uint16{
+	"MOV": 0x1,
+	"CMP": 0x2,
+	"CMN": 0x3,
+	"ROR": 0x4,
+	"NEG": 0x5,
+	"TST": 0x6,
+	"MVN": 0x7,
+}
+
+var rInstructions = map[string]uint16{
+	"BX":  0x1,
+	"BLX": 0x2,
+	"SWI": 0x3,
+	"HWN": 0x4,
+	"HWQ": 0x5,
+	"HWI": 0x6,
+	"XSR": 0x7,
+}
+
+var voidInstructions = map[string]uint16{
+	"RFI":   0,
+	"IFS":   1,
+	"IFC":   2,
+	"RET":   3,
+	"POPSP": 4,
+}
+
+var branchInstructions = map[string]uint16{
+	"B":   0x0,
+	"BL":  0x1,
+	"BEQ": 0x2,
+	"BNE": 0x3,
+	"BCS": 0x4,
+	"BCC": 0x5,
+	"BMI": 0x6,
+	"BPL": 0x7,
+	"BVS": 0x8,
+	"BVC": 0x9,
+	"BHI": 0xa,
+	"BLS": 0xb,
+	"BGE": 0xc,
+	"BLT": 0xd,
+	"BGT": 0xe,
+	"BLE": 0xf,
+}
+
+var specialInstructions = map[string]func(string, string, []*Arg, *AssemblyState){
 	"ADD": opAddSub,
-	"AND": opMathRR,
-	"ASR": opShift,
-	"BIC": opMathRR,
-	"CMN": opMathRR,
-	"CMP": opCmp,
-	"EOR": opMathRR,
-	"LSL": opShift,
-	"LSR": opShift,
-	"MOV": opMov,
-	"MUL": opMathRR,
-	"MVN": opMathRR,
-	"NEG": opMathRR,
-	"ORR": opMathRR,
-	"ROR": opMathRR,
-	"SBC": opMathRR,
 	"SUB": opAddSub,
-	"TST": opMathRR,
-	"B":   opBranch,
-	"BL":  opBranch,
-	"BX":  opBranch,
-	"BLX": opBranch,
-	"BEQ": opCondBranch,
-	"BNE": opCondBranch,
-	"BCS": opCondBranch,
-	"BCC": opCondBranch,
-	"BMI": opCondBranch,
-	"BPL": opCondBranch,
-	"BVS": opCondBranch,
-	"BVC": opCondBranch,
-	"BHI": opCondBranch,
-	"BLS": opCondBranch,
-	"BGE": opCondBranch,
-	"BLT": opCondBranch,
-	"BGT": opCondBranch,
-	"BLE": opCondBranch,
-	"HWN": opHardware,
-	"HWI": opHardware,
-	"HWQ": opHardware,
 	"SWI": opSWI,
-	"RFI": opInterrupts,
-	"IFS": opInterrupts,
-	"IFC": opInterrupts,
-	"MRS": opMRSR,
-	"MSR": opMRSR,
-	// These are legal instructions, but we shouldn't try to evaluate them like
-	// this. They have special cases.
-	"LDR":   opIllegal,
-	"STR":   opIllegal,
-	"PUSH":  opIllegal,
-	"POP":   opIllegal,
-	"STMIA": opIllegal,
-	"LDMIA": opIllegal,
 }

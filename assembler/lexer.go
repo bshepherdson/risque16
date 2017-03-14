@@ -28,7 +28,6 @@ const (
 	// Punctuation
 	DOT
 	HASH
-	BANG
 	COLON
 	COMMA
 	LBRAC
@@ -55,7 +54,6 @@ var tokenNames = map[Token]string{
 	STRING:   "string literal",
 	DOT:      "dot",
 	HASH:     "#",
-	BANG:     "!",
 	COLON:    ":",
 	COMMA:    ",",
 	LBRAC:    "[",
@@ -125,7 +123,13 @@ func (s *Scanner) Location() string {
 	return fmt.Sprintf("%s:%d:%d", s.file, s.line, s.col)
 }
 
-func (s *Scanner) Scan() (tok Token, lit string) {
+func (s *Scanner) Scan() (Token, string) {
+	t, l := s.innerScan()
+	fmt.Printf("%s - '%s'\n", tokenNames[t], l)
+	return t, l
+}
+
+func (s *Scanner) innerScan() (tok Token, lit string) {
 	ch := s.read()
 
 	// If we see whitespace, then consume it all.
@@ -158,16 +162,23 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return LBRAC, string(ch)
 	case ']':
 		return RBRAC, string(ch)
+	case '{':
+		return LBRACE, string(ch)
+	case '}':
+		return RBRACE, string(ch)
 	case '(':
 		return LPAREN, string(ch)
 	case ')':
 		return RPAREN, string(ch)
 	case '\n':
 		return NEWLINE, string(ch)
+	case ';':
+		return s.scanWhile(func(c rune) bool { return c != '\n' }, WS)
 	case '"':
 		return s.scanStringLiteral()
 	}
 
+	fmt.Printf("%v\n", ch)
 	return ILLEGAL, string(ch)
 }
 

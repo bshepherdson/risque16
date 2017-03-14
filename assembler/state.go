@@ -28,14 +28,14 @@ type AssemblyState struct {
 	used  map[uint16]bool
 }
 
-func (s *AssemblyState) lookup(key string) (uint16, bool) {
+func (s *AssemblyState) lookup(key string) (uint16, bool, bool) {
 	if lr, ok := s.labels[key]; ok {
-		return lr.value, lr.defined
+		return lr.value, lr.defined, true
 	}
 	if lr, ok := s.symbols[key]; ok {
-		return lr.value, lr.defined
+		return lr.value, lr.defined, true
 	}
-	return 0, false
+	return 0, false, false
 }
 
 func (s *AssemblyState) addLabel(l string) {
@@ -48,6 +48,7 @@ func (s *AssemblyState) updateLabel(l string, loc uint16) {
 			s.dirty = true
 		}
 		lr.value = loc
+		lr.defined = true
 	} else {
 		panic(fmt.Sprintf("unknown label: '%s'", l))
 	}

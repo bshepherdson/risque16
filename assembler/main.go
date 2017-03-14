@@ -16,11 +16,15 @@ func main() {
 		fmt.Printf("Error: %v\n", err)
 	} else {
 		s := new(AssemblyState)
+		s.labels = make(map[string]*LabelRef)
 		s.reset()
 		// Collect the labels.
+		fmt.Printf("===========================\n")
 		for _, l := range ast.Lines {
+			fmt.Printf("line: %#v\n", l)
 			labelDef, ok := l.(*LabelDef)
 			if ok {
+				fmt.Printf("label added: %s\n", labelDef.label)
 				s.addLabel(labelDef.label)
 			}
 		}
@@ -32,6 +36,7 @@ func main() {
 			for _, l := range ast.Lines {
 				l.Assemble(s)
 			}
+			fmt.Printf("resolved %t dirty %t\n", s.resolved, s.dirty)
 		}
 
 		// Now output the binary, big-endian.
