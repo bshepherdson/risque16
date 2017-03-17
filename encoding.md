@@ -132,13 +132,14 @@ does that by settings its opcode to 0.
 
 ### 0-Register Instructions
 
-| `ddd` | Assembly | Cycles | Flags   | Meaning |
-| :---  | :---     | :---   | :---    | :---    |
-| `$0`  | `RFI`    | 4      | Special | Return from interrupt (see below) |
-| `$1`  | `IFS`    | 1      | `----`  | Sets the `I` status bit, enabling interrupts |
-| `$2`  | `IFC`    | 1      | `----`  | Clear the `I` status bit, disabling interrupts |
-| `$3`  | `RET`    | 1      | `----`  | `PC := LR`, returns from simple subroutines |
-| `$4`  | `POPSP`  | 1      | `----`  | `SP := [SP]` |
+| `ddd` | Assembly | Cycles | Flags   | Meaning                                             |
+| :---  | :---     | :---   | :---    | :---                                                |
+| `$0`  | `RFI`    | 4      | Special | Return from interrupt (see below)                   |
+| `$1`  | `IFS`    | 1      | `----`  | Sets the `I` status bit, enabling interrupts        |
+| `$2`  | `IFC`    | 1      | `----`  | Clear the `I` status bit, disabling interrupts      |
+| `$3`  | `RET`    | 1      | `----`  | `PC := LR`, returns from simple subroutines         |
+| `$4`  | `POPSP`  | 1      | `----`  | `SP := [SP]`                                        |
+| `$5`  | `BRK`    | 1      | `----`  | Signals a breakpoint to the debug hardware, if any. |
 
 Note that `RET` is not required for returning from subroutines; it's just a
 helper for when you don't need to save `LR` to the stack.
