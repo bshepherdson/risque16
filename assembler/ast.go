@@ -316,6 +316,7 @@ var voidInstructions = map[string]uint16{
 	"IFC":   2,
 	"RET":   3,
 	"POPSP": 4,
+	"BRK":   5,
 }
 
 var branchInstructions = map[string]uint16{
