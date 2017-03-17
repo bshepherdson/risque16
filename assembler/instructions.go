@@ -31,8 +31,21 @@ func showArg(arg *Arg) string {
 }
 
 func opRI(loc, mnemonic string, opcode uint16, args []*Arg, s *AssemblyState) {
-	value := checkLiteral(s, args[1].lit, false, 8)
-	s.push((opcode << 11) | (args[0].reg << 8) | value)
+	if mnemonic == "MOV" {
+		// Special case for MOV: We can encode it as NEG or as MOV+MVH.
+		value := args[1].lit.Evaluate(s)
+		if value <= 255 {
+			s.push((opcode << 11) | (args[0].reg << 8) | value)
+		} else if value > 0xff00 {
+			s.push(0x1000 | (args[0].reg << 8) | -value)
+		} else {
+			s.push(0x0800 | (args[0].reg << 8) | (value & 0xff))
+			s.push(0x7800 | (args[0].reg << 8) | (value >> 8))
+		}
+	} else {
+		value := checkLiteral(s, args[1].lit, false, 8)
+		s.push((opcode << 11) | (args[0].reg << 8) | value)
+	}
 }
 
 func opRRR(loc, mnemonic string, opcode uint16, args []*Arg, s *AssemblyState) {
