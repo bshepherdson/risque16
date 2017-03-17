@@ -194,16 +194,16 @@ Depending on the opcode (`ooo`) the lower 4 bits are either:
 
 which is used for indexing or post-incrementing, as appropriate.
 
-| Op   | Assembly             | Cycles | Meaning |
-| :--- | :---                 | :---   | :---    |
+| Op   | Assembly             | Cycles | Meaning                                             |
+| :--- | :---                 | :---   | :---                                                |
 | `$0` | `LDR Rd, [Rb], #inc` | 1      | Load `Rd` from `[Rb]`, then increment `Rb` by `inc` |
-| `$1` | `STR Rd, [Rb], #inc` | 1      | Store `Rd` at `[Rb]`, then increment `Rb` by `inc` |
-| `$2` | `LDR Rd, [Rb, #inc]` | 1      | Load `Rd` from `[Rb+inc]` (`Rb` unchanged) |
-| `$3` | `STR Rd, [Rb, #inc]` | 1      | Store `Rd` at `[Rb+inc]` (`Rb` unchanged) |
-| `$4` | `LDR Rd, [Rb, Ra]`   | 2      | Load `Rd` from `[Rb+Ra]` (`Rb`, `Ra` unchanged) |
-| `$5` | `STR Rd, [Rb, Ra]`   | 2      | Store `Rd` at `[Rb+Ra]` (`Rb`, `Ra` unchanged) |
-| `$6` | `LDR Rd, [SP, #inc]` | 1      | Load `Rd` from `[Rb+Ra]` (`Rb`, `Ra` unchanged) |
-| `$7` | `STR Rd, [SP, #inc]` | 1      | Store `Rd` at `[Rb+Ra]` (`Rb`, `Ra` unchanged) |
+| `$1` | `STR Rd, [Rb], #inc` | 1      | Store `Rd` at `[Rb]`, then increment `Rb` by `inc`  |
+| `$2` | `LDR Rd, [Rb, #inc]` | 1      | Load `Rd` from `[Rb+inc]` (`Rb` unchanged)          |
+| `$3` | `STR Rd, [Rb, #inc]` | 1      | Store `Rd` at `[Rb+inc]` (`Rb` unchanged)           |
+| `$4` | `LDR Rd, [Rb, Ra]`   | 2      | Load `Rd` from `[Rb+Ra]` (`Rb`, `Ra` unchanged)     |
+| `$5` | `STR Rd, [Rb, Ra]`   | 2      | Store `Rd` at `[Rb+Ra]` (`Rb`, `Ra` unchanged)      |
+| `$6` | `LDR Rd, [SP, #inc]` | 1      | Load `Rd` from `[SP+inc]` (`SP` unchanged)          |
+| `$7` | `STR Rd, [SP, #inc]` | 1      | Store `Rd` at `[SP+inc]` (`SP` unchanged)           |
 
 Notes:
 
