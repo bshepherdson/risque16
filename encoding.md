@@ -73,29 +73,29 @@ These have `oooo` set to 0, and no `Rd`: the `ddd` slot gives the operation.
 
 ## Register Format
 
-`10ooooobbbaaaddd`
+`100oooobbbaaaddd`
 
-This format has a 5-bit opcode, and 3 3-bit register fields, in that order.
+This format has a 4-bit opcode, and 3 3-bit register fields, in that order.
 
 Each format can punt to the next, if it doesn't need 3 registers as operands. It
 does that by settings its opcode to 0.
 
 ### 3-Register Instructions
 
-| Op    | Assembly            | Cycles | Flags  | Meaning                           |
-| :---  | :---                | :---   | :---   | :---                              |
-| `$00` | (2-register format) |        |        | See 2-Register Instructions below |
-| `$01` | `ADD Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra + Rb`                   |
-| `$02` | `ADC Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra + Rb + C-bit`           |
-| `$03` | `SUB Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra - Rb`                   |
-| `$04` | `SBC Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra - Rb - NOT C-bit`       |
-| `$05` | `MUL Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra * Rb`                   |
-| `$06` | `LSL Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra << Rb`                  |
-| `$07` | `LSR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>> Rb`                 |
-| `$08` | `ASR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>  Rb`                 |
-| `$09` | `AND Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra & Rb`                   |
-| `$0a` | `ORR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra | Rb`                   |
-| `$0b` | `XOR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra ^ Rb`                   |
+| Op   | Assembly            | Cycles | Flags  | Meaning                           |
+| :--- | :---                | :---   | :---   | :---                              |
+| `$0` | (2-register format) |        |        | See 2-Register Instructions below |
+| `$1` | `ADD Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra + Rb`                   |
+| `$2` | `ADC Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra + Rb + C-bit`           |
+| `$3` | `SUB Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra - Rb`                   |
+| `$4` | `SBC Rd, Ra, Rb`    | 1      | `NZCV` | `Rd := Ra - Rb - NOT C-bit`       |
+| `$5` | `MUL Rd, Ra, Rb`    | 4      | `NZCV` | `Rd := Ra * Rb`                   |
+| `$6` | `LSL Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra << Rb`                  |
+| `$7` | `LSR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>> Rb`                 |
+| `$8` | `ASR Rd, Ra, Rb`    | 1      | `NZC0` | `Rd := Ra >>  Rb`                 |
+| `$9` | `AND Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra & Rb`                   |
+| `$a` | `ORR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra | Rb`                   |
+| `$b` | `XOR Rd, Ra, Rb`    | 1      | `NZ00` | `Rd := Ra ^ Rb`                   |
 
 
 ### 2-Register Instructions
