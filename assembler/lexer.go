@@ -143,7 +143,7 @@ func (s *Scanner) innerScan() (tok Token, lit string) {
 		s.unread()
 		// TODO: Other bases.
 		// TODO: Negatives.
-		return s.scanWhile(isDigit, NUMBER)
+		return s.scanNumber()
 	}
 
 	// Otherwise, scan individual characters.
@@ -235,6 +235,30 @@ func (s *Scanner) scanIdent() (tok Token, lit string) {
 	} else {
 		return IDENT, st
 	}
+}
+
+func (s *Scanner) scanNumber() (tok Token, lit string) {
+	var buf bytes.Buffer
+	ch := s.read()
+	firstZero := ch == '0'
+	count := 1
+	buf.WriteRune(ch)
+
+	for {
+		ch = s.read()
+		if isHexDigit(ch) || (firstZero && count == 1 && ch == 'x') {
+			buf.WriteRune(ch)
+			count++
+		} else {
+			s.unread()
+			return NUMBER, buf.String()
+		}
+	}
+}
+
+func isHexDigit(ch rune) bool {
+	return ('0' <= ch && ch <= '9') || ('a' <= ch && ch <= 'f') ||
+		('A' <= ch && ch <= 'F')
 }
 
 func (s *Scanner) scanStringLiteral() (tok Token, lit string) {

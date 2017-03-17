@@ -185,7 +185,7 @@ func (p *Parser) parseSimpleExpr() (Expression, error) {
 	case IDENT:
 		return &LabelUse{lit, loc}, nil
 	case NUMBER:
-		n, err := strconv.Atoi(lit)
+		n, err := strconv.ParseInt(lit, 0, 0)
 		if err != nil {
 			return nil, err
 		}
