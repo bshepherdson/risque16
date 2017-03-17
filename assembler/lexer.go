@@ -136,7 +136,7 @@ func (s *Scanner) innerScan() (tok Token, lit string) {
 	if isWhitespace(ch) {
 		s.unread()
 		return s.scanWhile(isWhitespace, WS)
-	} else if isLetter(ch) {
+	} else if isLetter(ch) || ch == '_' {
 		s.unread()
 		return s.scanIdent()
 	} else if isDigit(ch) {
