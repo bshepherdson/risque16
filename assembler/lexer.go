@@ -37,7 +37,17 @@ const (
 	LBRACE
 	RBRACE
 
-	// TODO: Operators, for subexpressions.
+	// Operators
+	PLUS
+	MINUS
+	TIMES
+	DIVIDE
+	LANGLES
+	RANGLES
+	AND
+	OR
+	XOR
+	NOT
 )
 
 var tokenNames = map[Token]string{
@@ -62,6 +72,16 @@ var tokenNames = map[Token]string{
 	RBRACE:   "}",
 	LPAREN:   "(",
 	RPAREN:   ")",
+	PLUS:     "+",
+	MINUS:    "-",
+	TIMES:    "*",
+	DIVIDE:   "/",
+	LANGLES:  "<<",
+	RANGLES:  ">>",
+	AND:      "&",
+	OR:       "|",
+	XOR:      "^",
+	NOT:      "~",
 }
 
 // We'll put this EOF rune on the end of everything.
@@ -172,6 +192,36 @@ func (s *Scanner) innerScan() (tok Token, lit string) {
 		return RPAREN, string(ch)
 	case '\n':
 		return NEWLINE, string(ch)
+	case '+':
+		return PLUS, string(ch)
+	case '-':
+		return MINUS, string(ch)
+	case '*':
+		return TIMES, string(ch)
+	case '/':
+		return DIVIDE, string(ch)
+	case '&':
+		return AND, string(ch)
+	case '|':
+		return OR, string(ch)
+	case '^':
+		return XOR, string(ch)
+	case '~':
+		return NOT, string(ch)
+	case '<':
+		next := s.read()
+		if next == '<' {
+			return LANGLES, "<<"
+		} else {
+			return ILLEGAL, string(ch) + string(next)
+		}
+	case '>':
+		next := s.read()
+		if next == '>' {
+			return RANGLES, ">>"
+		} else {
+			return ILLEGAL, string(ch) + string(next)
+		}
 	case ';':
 		return s.scanWhile(func(c rune) bool { return c != '\n' }, WS)
 	case '"':

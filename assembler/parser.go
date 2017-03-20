@@ -176,9 +176,111 @@ func (p *Parser) parseDirective() (Assembled, error) {
 }
 
 // "Simple expression" is kind of a misnomer; it's actually any expression other
-// than a string literal, since those are only allowed in
+// than a string literal, since those are only allowed in DAT lines.
+// "Simple" expressions can actually be a whole parse tree.
+// The grammar looks like this:
+// expr  := expr1 | expr1 addOp expr
+// expr1 := expr2 | expr2 mulOp exp1
+// expr2 := unaryOp? expr3
+// expr3 := identifier | literal | ( expr )
+// mulOp := * / & << >>
+// addOp := + - | ^
+// unaryOp := - ~
+func (p *Parser) parseOperatorChain(parseSubExpr func(p *Parser) (Expression, error), parseOperator func(p *Parser) (Token, error)) (Expression, error) {
+	// We parse a loop of subexpressions, separated by ops.
+	exprs := make([]Expression, 0, 2)
+	ops := make([]Token, 0, 2)
+
+	for {
+		e, err := parseSubExpr(p)
+		if err != nil {
+			break
+		}
+		exprs = append(exprs, e)
+
+		op, err := parseOperator(p)
+		if err != nil {
+			break
+		}
+		ops = append(ops, op)
+	}
+
+	// Now check if we've got compatible numbers of exprs and ops.
+	// There should be one more expression than operation.
+	if len(exprs) != len(ops)+1 {
+		return nil, fmt.Errorf("Mismatched operation chain: %d expressions and %d operations; at %s", len(exprs), len(ops), p.s.Location())
+	}
+
+	// With a matching set of operations, we reduce them in left-associative
+	// order.
+	final := exprs[0]
+	for i, op := range ops {
+		final = &BinExpr{final, op, exprs[i+1]}
+	}
+	return final, nil
+}
+
 func (p *Parser) parseSimpleExpr() (Expression, error) {
-	// TODO: More complete expression parsing.
+	return p.parseOperatorChain(parseMulExpr, parseAddOp)
+}
+
+func parseMulExpr(p *Parser) (Expression, error) {
+	return p.parseOperatorChain(parseUnaryExpr, parseMulOp)
+}
+
+func parseAddOp(p *Parser) (Token, error) {
+	tok, _ := p.scanIgnoreWhitespace()
+	switch tok {
+	case PLUS, MINUS, OR, XOR:
+		return tok, nil
+	default:
+		p.unscan()
+		return ILLEGAL, fmt.Errorf("Found non-additive operator %s at %s", tokenNames[tok], p.s.Location())
+	}
+}
+
+func parseMulOp(p *Parser) (Token, error) {
+	tok, _ := p.scanIgnoreWhitespace()
+	switch tok {
+	case TIMES, DIVIDE, AND:
+		return tok, nil
+	default:
+		p.unscan()
+		return ILLEGAL, fmt.Errorf("Found non-multiplicative operator %s at %s", tokenNames[tok], p.s.Location())
+	}
+}
+
+func parseUnaryExpr(p *Parser) (Expression, error) {
+	// 0 or more unary expressions on the front.
+	ops := make([]Token, 0, 2)
+	for {
+		fmt.Printf("PUE loop\n")
+		tok, _ := p.scanIgnoreWhitespace()
+		if tok == PLUS || tok == MINUS || tok == NOT {
+			ops = append(ops, tok)
+		} else {
+			p.unscan()
+			break
+		}
+	}
+
+	// Now we've got a list of operations, followed by an expression.
+	// Parse the expression.
+	e, err := p.parseTerm()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := len(ops) - 1; i >= 0; i-- {
+		e = &UnaryExpr{ops[i], e}
+	}
+
+	return e, nil
+}
+
+func (p *Parser) parseTerm() (Expression, error) {
+	// Parse a simple term in the expression: a literal, an identifier, or a
+	// bracketed subexpression.
 	loc := p.s.Location()
 	tok, lit := p.scanIgnoreWhitespace()
 	switch tok {
@@ -190,6 +292,16 @@ func (p *Parser) parseSimpleExpr() (Expression, error) {
 			return nil, err
 		}
 		return &Constant{uint16(n), loc}, nil
+	case LPAREN:
+		subexpr, err := p.parseSimpleExpr()
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing bracketed subexpression: %v", err)
+		}
+		tok, lit = p.scanIgnoreWhitespace()
+		if tok != RPAREN {
+			return nil, fmt.Errorf("Failed to parse bracketed subexpression: expected ) but found %s '%s'", tokenNames[tok], lit)
+		}
+		return subexpr, nil
 	}
 	p.unscan()
 	return nil, fmt.Errorf("Found %s while parsing expression", tokenNames[tok])

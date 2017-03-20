@@ -42,6 +42,60 @@ type Constant struct {
 func (c *Constant) Evaluate(s *AssemblyState) uint16 { return c.value }
 func (c *Constant) Location() string                 { return c.loc }
 
+type BinExpr struct {
+	lhs      Expression
+	operator Token
+	rhs      Expression
+}
+
+func (b *BinExpr) Evaluate(s *AssemblyState) uint16 {
+	l := b.lhs.Evaluate(s)
+	r := b.rhs.Evaluate(s)
+	switch b.operator {
+	case PLUS:
+		return l + r
+	case MINUS:
+		return l - r
+	case TIMES:
+		return l * r
+	case DIVIDE:
+		return l / r
+	case AND:
+		return l & r
+	case OR:
+		return l | r
+	case XOR:
+		return l ^ r
+	default:
+		panic(fmt.Sprintf("unknown binary operation %s", tokenNames[b.operator]))
+	}
+}
+
+func (b *BinExpr) Location() string {
+	return b.lhs.Location()
+}
+
+type UnaryExpr struct {
+	operator Token
+	expr     Expression
+}
+
+func (u *UnaryExpr) Evaluate(s *AssemblyState) uint16 {
+	value := u.expr.Evaluate(s)
+	switch u.operator {
+	case PLUS:
+		return value
+	case MINUS:
+		return -value
+	case NOT:
+		return 0xffff ^ value
+	default:
+		panic(fmt.Sprintf("unknown unary operation %s", tokenNames[u.operator]))
+	}
+}
+
+func (u *UnaryExpr) Location() string { return u.expr.Location() }
+
 // Assembled describes something that can be assembled into the binary,
 // such as an instruction, and some directives.
 type Assembled interface {
