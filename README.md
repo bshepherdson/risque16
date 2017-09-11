@@ -10,7 +10,7 @@ Thumb architecture, the 16-bit variant of ARM.
 ## Overview
 
 The Risque-16 is a 16-bit, word-addressing RISC architecture CPU. The clock
-speed is 200kHz, and most instructions require 1 cycle to execute. Since each
+speed is 200kHz, and most instructions require 1 or 2 cycles to execute. Since each
 cycle generally does less than a DCPU cycle, the overall pace of operation is
 comparable.
 
@@ -136,4 +136,11 @@ instruction, `PC` points at the next instruction.
 
 Most instructions take 1 or 2 cycles, as noted in their descriptions. `MUL`
 takes 4, as do several that work with interrupts or hardware.
+
+
+## Division
+
+There are no instructions for division or modulus, just as there are none on ARM
+or Thumb. I hope to provide fast, well-tested reference implementations here
+eventually, but I don't have them written at this time.
 

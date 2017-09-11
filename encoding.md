@@ -151,6 +151,13 @@ helper for when you don't need to save `LR` to the stack.
 
 The literal is an 9-bit signed offset. It's relative to the next instruction.
 
+Branches can also be encoded in "long form", where the branch destination is
+given as an absolute label in the next word.
+
+The branch offset is set to -1 to signal that long form is in use. (That
+prevents branching back to the same instruction in short form, which is
+considered an acceptable loss.)
+
 | Op   | Assembly    | Cycles | Meaning |
 | :--- | :---        | :---   | :---    |
 | `$0` | `B   label` | 1 or 2 | Branch always |
@@ -170,17 +177,8 @@ The literal is an 9-bit signed offset. It's relative to the next instruction.
 | `$e` | `BGT label` | 1 or 2 | Branch if `Z` clear, and `N` and `V` match (signed greater than) |
 | `$f` | `BLE label` | 1 or 2 | Branch if `Z` set, or `N` and `V` differ (signed less than or equal) |
 
-A branch offset is needed that signals we're using the long form.
 
-Using 0 doesn't work, it can cause an infinite loop. If the actual target is the
-next word, the diff would be 0 but we need to use the long form. That makes the
-offset 1, not 0. Then we can use the short form, etc.
-
-So instead we use -1. That would loop back to the branch itself, but that can
-be encoded as the long form without trouble.
-
-Branches take 1 cycle on success in short form. Long-form success, or failure
-in either form, takes 2 cycles.
+Branches take 1 cycle on success in short form. Long form takes 1 extra cycle. Failure in either form costs 1 extra cycle. (That is, a failed long-form branch costs 3 cycles.)
 
 
 
